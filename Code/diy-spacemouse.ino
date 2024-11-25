@@ -13,19 +13,22 @@ OneButton button2(24, true);
 float xOffset = 0, yOffset = 0, zOffset = 0;
 float xCurrent = 0, yCurrent = 0, zCurrent = 0;
 
-int calSamples = 300;
-int sensivity = 8;
-int magRange = 3;
-int outRange = 127;      // Max allowed in HID report
-float xyThreshold = 0.4; // Center threshold
+int calSamples = 300;     // (300)
+int sensivity = 9;        // (8) czulosc
+int magRange = 3;         // (3)
+int outRange = 127;       // (127)
+float xyThreshold = 0.5;  // wartosc powyzej ktorej przesuwa sie kursor
+float zThreshold = 1.5;   // wartosc powyzej ktorej jest zmiana z obracania na przesuwanie modelu
+float xCorr = -0.60;      // korekta w pionie
+float yCorr = -0.60;      // korekta w poziomie
+float zCorr =  0.00;      // korekta nacisku
 
 int inRange = magRange * sensivity;
-float zThreshold = xyThreshold * 1.5;
+float lastMagUpdate;
 
 bool isOrbit = false;
 
-void setup()
-{
+void setup() {
 
   button1.attachClick(goHome);
   button1.attachLongPressStop(goHome);
@@ -33,22 +36,19 @@ void setup()
   button2.attachClick(fitToScreen);
   button2.attachLongPressStop(fitToScreen);
 
-  // mouse and keyboard init
   Mouse.begin();
   Keyboard.begin();
 
   Serial.begin(9600);
   Wire1.begin();
 
-  // mag sensor init
   mag.begin(Wire1);
   mag.setAccessMode(mag.MASTERCONTROLLEDMODE);
+  //mag.setCheckFrameCountError(true);
   mag.disableTemp();
+  //calibrateSensor();
 
-  // crude offset calibration on first boot
-  for (int i = 1; i <= calSamples; i++)
-  {
-
+  for (int i = 1; i <= calSamples; i++) {
     delay(mag.getMeasurementDelay());
     mag.updateData();
 
@@ -69,65 +69,58 @@ void setup()
   Serial.println(zOffset);
 }
 
-void loop()
-{
-
-  // keep watching the push buttons
+void loop() {
   button1.tick();
   button2.tick();
 
-  // get the mag data
   delay(mag.getMeasurementDelay());
-  mag.updateData();
+  //mag.updateData();
 
-  // update the filters
-  xCurrent = xFilter.updateEstimate(mag.getX() - xOffset);
-  yCurrent = yFilter.updateEstimate(mag.getY() - yOffset);
-  zCurrent = zFilter.updateEstimate(mag.getZ() - zOffset);
+  // Update the magnetometer
+  Tlv493d_Error updateDataResult = mag.updateData();
+  lastMagUpdate = millis();
 
-  // check the center threshold
-  if (abs(xCurrent) > xyThreshold || abs(yCurrent) > xyThreshold)
-  {
+  // Value of 2 means ADC hang-up has occurred. Reset the sensor to fix.
+  if (updateDataResult == 2) {
+    return resetSensor();
+  }
 
-    int xMove = 0;
-    int yMove = 0;
+  xCurrent = yFilter.updateEstimate((mag.getY() - xOffset)) + xCorr;     // ruch w pionie z korekta
+  yCurrent = xFilter.updateEstimate((mag.getX() - yOffset)*-1) + yCorr;  // ruch w poziomie z korekta
+  zCurrent = zFilter.updateEstimate((mag.getZ() - zOffset)) + zCorr;     // nacisk z korekta
 
-    // map the magnetometer xy to the allowed 127 range in HID repports
-    xMove = map(xCurrent, -inRange, inRange, -outRange, outRange);
-    yMove = map(yCurrent, -inRange, inRange, -outRange, outRange);
+  if (abs(xCurrent) > xyThreshold || abs(yCurrent) > xyThreshold) {     // jesli wartosci przesuniecia x i y sa powyzej x i y Threshold to ruszaj kursorem
+    int xMove = map(xCurrent, -inRange, inRange, -outRange, outRange);
+    int yMove = map(yCurrent, -inRange, inRange, -outRange, outRange);
 
-    // press shift to orbit in Fusion 360 if the pan threshold is not corssed (zAxis)
-    if (abs(zCurrent) < zThreshold && !isOrbit)
-    {
+    if (abs(zCurrent) < zThreshold && !isOrbit) {                       // jesli dodatkowo nacisk nie przekracza zThreshold to obracaj model
       Keyboard.press(KEY_LEFT_SHIFT);
       isOrbit = true;
     }
 
-    // pan or orbit by holding the middle mouse button and moving propotionaly to the xy axis
-    Mouse.press(MOUSE_MIDDLE);
+    Mouse.press(MOUSE_MIDDLE);                                          // jesli dodatkowo nacisk przekracza zThreshold to przesuwaj model
     Mouse.move(yMove, xMove, 0);
-  }
-  else
-  {
-
-    // release the mouse and keyboard if within the center threshold
+  } else {
     Mouse.release(MOUSE_MIDDLE);
-    Keyboard.releaseAll();
-    isOrbit = false;
+    if (isOrbit) {
+      Keyboard.release(KEY_LEFT_SHIFT);
+      isOrbit = false;
+    }
   }
 
+  Keyboard.releaseAll();
+
+  Serial.print("Pion: ");
   Serial.print(xCurrent);
-  Serial.print(",");
+  Serial.print(" Poziom: ");
   Serial.print(yCurrent);
-  Serial.print(",");
+  Serial.print(" Nacisk: ");
   Serial.print(zCurrent);
   Serial.println();
 }
 
-// go to home view in Fusion 360 by pressing  (CMD + SHIFT + H) shortcut assigned to the custom Add-in command
-void goHome()
-{
-  Keyboard.press(KEY_LEFT_GUI);
+void goHome() {
+  Keyboard.press(KEY_LEFT_CTRL);
   Keyboard.press(KEY_LEFT_SHIFT);
   Keyboard.write('h');
 
@@ -136,13 +129,20 @@ void goHome()
   Serial.println("pressed home");
 }
 
-// fit to view by pressing the middle mouse button twice
-void fitToScreen()
-{
+void fitToScreen() {
   Mouse.press(MOUSE_MIDDLE);
   Mouse.release(MOUSE_MIDDLE);
   Mouse.press(MOUSE_MIDDLE);
   Mouse.release(MOUSE_MIDDLE);
 
   Serial.println("pressed fit");
+}
+
+void resetSensor() {
+  mag.end();
+  mag.begin(Wire1);
+  mag.setAccessMode(mag.MASTERCONTROLLEDMODE);
+  mag.setCheckFrameCountError(true);
+  mag.disableTemp();
+  delay(100);
 }
