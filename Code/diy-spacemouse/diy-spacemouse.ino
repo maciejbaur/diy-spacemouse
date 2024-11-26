@@ -18,13 +18,13 @@ int sensivity = 9;        // (8) czulosc
 int magRange = 3;         // (3)
 int outRange = 127;       // (127)
 float xyThreshold = 0.5;  // wartosc powyzej ktorej przesuwa sie kursor
-float zThreshold = 1.5;   // wartosc powyzej ktorej jest zmiana z obracania na przesuwanie modelu
+float zThreshold = 1.8;   // wartosc powyzej ktorej jest zmiana z obracania na przesuwanie modelu
 float xCorr = -0.60;      // korekta w pionie
 float yCorr = -0.60;      // korekta w poziomie
 float zCorr =  0.00;      // korekta nacisku
 
 int inRange = magRange * sensivity;
-float lastMagUpdate;
+// float lastMagUpdate;
 
 bool isOrbit = false;
 
@@ -74,16 +74,16 @@ void loop() {
   button2.tick();
 
   delay(mag.getMeasurementDelay());
-  //mag.updateData();
+  mag.updateData();
 
   // Update the magnetometer
-  Tlv493d_Error updateDataResult = mag.updateData();
-  lastMagUpdate = millis();
+  // Tlv493d_Error updateDataResult = mag.updateData();
+  // lastMagUpdate = millis();
 
   // Value of 2 means ADC hang-up has occurred. Reset the sensor to fix.
-  if (updateDataResult == 2) {
-    return resetSensor();
-  }
+  // if (updateDataResult == 2) {
+  //   return resetSensor();
+  // }
 
   xCurrent = yFilter.updateEstimate((mag.getY() - xOffset)) + xCorr;     // ruch w pionie z korekta
   yCurrent = xFilter.updateEstimate((mag.getX() - yOffset)*-1) + yCorr;  // ruch w poziomie z korekta
@@ -138,11 +138,11 @@ void fitToScreen() {
   Serial.println("pressed fit");
 }
 
-void resetSensor() {
-  mag.end();
-  mag.begin(Wire1);
-  mag.setAccessMode(mag.MASTERCONTROLLEDMODE);
-  mag.setCheckFrameCountError(true);
-  mag.disableTemp();
-  delay(100);
-}
+// void resetSensor() {
+//   mag.end();
+//   mag.begin(Wire1);
+//   mag.setAccessMode(mag.MASTERCONTROLLEDMODE);
+//   mag.setCheckFrameCountError(true);
+//   mag.disableTemp();
+//   delay(100);
+// }
