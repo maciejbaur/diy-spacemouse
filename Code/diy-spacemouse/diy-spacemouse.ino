@@ -15,10 +15,10 @@ float xCurrent = 0, yCurrent = 0, zCurrent = 0;
 unsigned long lastMagUpdate;
 
 int calSamples = 300;     // (300)
-int sensivity = 9;        // (8) czulosc
+int sensivity = 8;        // (8) czulosc
 int magRange = 3;         // (3)
 int outRange = 127;       // (127)
-float xyThreshold = 0.5;  // wartosc powyzej ktorej przesuwa sie kursor
+float xyThreshold = 0.4;  // wartosc powyzej ktorej przesuwa sie kursor
 float zThreshold = 1.8;   // wartosc powyzej ktorej jest zmiana z obracania na przesuwanie modelu
 // float xCorr = -0.60;      // korekta w pionie
 // float yCorr = -0.60;      // korekta w poziomie
@@ -66,10 +66,6 @@ void setup() {
   yOffset = yOffset / calSamples;
   zOffset = zOffset / calSamples;
 
-  Serial.println();
-  Serial.println(xOffset);
-  Serial.println(yOffset);
-  Serial.println(zOffset);
 }
 
 void loop() {
@@ -86,6 +82,7 @@ void loop() {
   // Value of 2 means ADC hang-up has occurred. Reset the sensor to fix.
   if (updateDataResult == 2) {
     return resetSensor();
+    Serial.print("Sensor Reset!");
   }
 
   // xCurrent = yFilter.updateEstimate((mag.getY() - xOffset)) + xCorr;     // ruch w pionie z korekta
@@ -93,7 +90,7 @@ void loop() {
   // zCurrent = zFilter.updateEstimate((mag.getZ() - zOffset)) + zCorr;     // nacisk z korekta
 
   xCurrent = yFilter.updateEstimate((mag.getY() - xOffset));     // ruch w pionie
-  yCurrent = xFilter.updateEstimate((mag.getX() - yOffset)*-1);  // ruch w poziomie
+  yCurrent = xFilter.updateEstimate((mag.getX() - yOffset));  // ruch w poziomie
   zCurrent = zFilter.updateEstimate((mag.getZ() - zOffset));     // nacisk
 
   if (abs(xCurrent) > xyThreshold || abs(yCurrent) > xyThreshold) {     // jesli wartosci przesuniecia x i y sa powyzej x i y Threshold to ruszaj kursorem
@@ -124,6 +121,7 @@ void loop() {
   Serial.print(" Nacisk: ");
   Serial.print(zCurrent);
   Serial.println();
+ 
 }
 
 void goHome() {
